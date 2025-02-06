@@ -712,6 +712,7 @@ def process_response(input_text, response, is_voice=False):
             title = title[:50] + '...' if len(title) > 50 else title
             st.session_state.chat_history[current_chat_id]['first_message'] = title
             st.session_state.chat_history[current_chat_id]['visible'] = True
+            st.rerun()  # Immediately update the chat list in sidebar
         
         # ... rest of the existing process_response code ...
         
