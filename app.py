@@ -12,6 +12,54 @@ import fitz  # PyMuPDF for capturing screenshots
 import pdfplumber  # For searching text in PDF
 import torch
 from sentence_transformers import SentenceTransformer
+from datetime import datetime
+
+# Initialize session state for chat management
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = {}
+if 'current_chat_id' not in st.session_state:
+    st.session_state.current_chat_id = None
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'chat_memories' not in st.session_state:
+    st.session_state.chat_memories = {}
+
+def create_new_chat():
+    """Create a new independent chat"""
+    chat_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    st.session_state.current_chat_id = chat_id
+    st.session_state.messages = []
+    
+    # Create new memory instance for this specific chat
+    st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
+        memory_key="history",
+        return_messages=True
+    )
+    
+    # Initialize chat
+    st.session_state.chat_history[chat_id] = {
+        'messages': [],
+        'timestamp': datetime.now(),
+        'first_message': None,
+        'visible': False
+    }
+    return chat_id
+
+def load_chat(chat_id):
+    """Load a specific chat"""
+    if chat_id in st.session_state.chat_history:
+        st.session_state.current_chat_id = chat_id
+        st.session_state.messages = st.session_state.chat_history[chat_id]['messages'].copy()
+        st.rerun()
+
+def format_chat_title(chat):
+    """Format chat title"""
+    display_text = chat['first_message']
+    if display_text:
+        display_text = display_text[:50] + '...' if len(display_text) > 50 else display_text
+    else:
+        display_text = "New Chat" if interface_language == "English" else "محادثة جديدة"
+    return display_text
 
 # Initialize API key variables
 groq_api_key = "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"
@@ -74,6 +122,24 @@ class PDFSearchAndDisplay:
 with st.sidebar:
     # Language selection dropdown
     interface_language = st.selectbox("Interface Language", ["English", "العربية"])
+    
+    # New Chat button
+    if st.button("New Chat" if interface_language == "English" else "محادثة جديدة", use_container_width=True):
+        create_new_chat()
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Display chat history
+    st.markdown("### Previous Chats" if interface_language == "English" else "### المحادثات السابقة")
+    
+    # Display all visible chats
+    for chat_id, chat_data in sorted(st.session_state.chat_history.items(), 
+                                   key=lambda x: x[1]['timestamp'], 
+                                   reverse=True):
+        if chat_data['visible']:
+            if st.button(format_chat_title(chat_data), key=f"chat_{chat_id}", use_container_width=True):
+                load_chat(chat_id)
 
     # Apply CSS direction based on selected language
     if interface_language == "العربية":
@@ -437,45 +503,56 @@ def display_page_references(message_index, relevant_pages):
 def process_response(input_text, response, is_voice=False):
     """Process response with enhanced page reference handling"""
     try:
+        current_chat_id = st.session_state.current_chat_id
+        
+        # Create new chat if none exists
+        if current_chat_id is None:
+            current_chat_id = create_new_chat()
+        
         # Add user message
-        st.session_state.messages.append({"role": "user", "content": input_text})
-        with st.chat_message("user"):
-            st.markdown(input_text)
-
+        user_message = {"role": "user", "content": input_text}
+        st.session_state.messages.append(user_message)
+        
         # Get response and context
         assistant_response = response["answer"]
         context = response.get("context", [])
         current_msg_index = len(st.session_state.messages)
 
-        # Check for uncertainty in response
-        uncertain_response = any(phrase.lower() in assistant_response.lower() for phrase in negative_phrases)
-        
-        # Override uncertainty if we have good context
-        if uncertain_response and context:
-            has_tables = any("table" in doc.page_content.lower() for doc in context)
-            if has_tables:
-                for phrase in negative_phrases:
-                    assistant_response = assistant_response.replace(phrase, "")
-                uncertain_response = False
-
         # Add assistant message
-        st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+        assistant_message = {"role": "assistant", "content": assistant_response}
+        st.session_state.messages.append(assistant_message)
+        
+        # Update chat history and visibility for first message
+        if len(st.session_state.messages) <= 2:  # First user message + first assistant response
+            title = input_text.strip().replace('\n', ' ')
+            title = title[:50] + '...' if len(title) > 50 else title
+            st.session_state.chat_history[current_chat_id] = {
+                'messages': st.session_state.messages.copy(),
+                'timestamp': datetime.now(),
+                'first_message': title,
+                'visible': True
+            }
+            st.rerun()  # Force refresh for first message
+        else:
+            # Update existing chat history
+            st.session_state.chat_history[current_chat_id]['messages'] = st.session_state.messages.copy()
+        
+        # Display messages
+        with st.chat_message("user"):
+            st.markdown(input_text)
         with st.chat_message("assistant"):
             st.markdown(assistant_response)
-
+        
         # Update memory
-        st.session_state.memory.chat_memory.add_user_message(input_text)
-        st.session_state.memory.chat_memory.add_ai_message(assistant_response)
+        current_memory = st.session_state.chat_memories[current_chat_id]
+        current_memory.chat_memory.add_user_message(input_text)
+        current_memory.chat_memory.add_ai_message(assistant_response)
         
         # Process page references
         if context:
-            # Combine question and answer for better context matching
             query_text = f"{input_text} {assistant_response}"
-            
-            # Get relevant pages with semantic scoring
             relevant_pages = get_relevant_pages(context, query_text)
             
-            # Display references if found
             if relevant_pages:
                 page_numbers_str = ", ".join(map(str, sorted(relevant_pages.keys())))
                 st.session_state.page_references[current_msg_index] = {
@@ -483,7 +560,6 @@ def process_response(input_text, response, is_voice=False):
                     "scores": relevant_pages
                 }
                 
-                # Display page references
                 with st.chat_message("assistant"):
                     display_page_references(current_msg_index, relevant_pages)
         
@@ -659,9 +735,9 @@ def format_chat_date(timestamp):
 
 # ... rest of the existing code ...
 
-# Update the sidebar section with chat history
+# Update sidebar chat list display
 with st.sidebar:
-    # Add New Chat button after the existing sidebar content
+    # Add New Chat button
     if st.button(UI_TEXTS[interface_language]['new_chat'], use_container_width=True):
         create_new_chat()
         st.rerun()
@@ -674,7 +750,7 @@ with st.sidebar:
     # Group chats by date
     chats_by_date = {}
     for chat_id, chat_data in st.session_state.chat_history.items():
-        if chat_data['visible'] and chat_data['messages']:
+        if chat_data['visible'] and len(chat_data['messages']) > 0:  # Only show chats with messages
             date = chat_data['timestamp'].date()
             if date not in chats_by_date:
                 chats_by_date[date] = []
