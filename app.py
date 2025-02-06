@@ -423,7 +423,7 @@ def display_page_references(message_index, relevant_pages):
                         score = relevant_pages[page_num]["score"]
                         # Only show screenshots for highly relevant pages (score > 0.5)
                         if score >= 0.5:
-                            Show content preview
+                            # Show content preview
                             st.write("Content Preview:")
                             content = relevant_pages[page_num]["content"]
                             st.text(content[:200] + "..." if len(content) > 200 else content)
