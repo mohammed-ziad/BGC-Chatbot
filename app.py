@@ -43,6 +43,10 @@ def create_new_chat():
         'first_message': None,
         'visible': False
     }
+    
+    # Clear page references for new chat
+    st.session_state.page_references = {}
+    
     return chat_id
 
 def load_chat(chat_id):
@@ -50,7 +54,7 @@ def load_chat(chat_id):
     if chat_id in st.session_state.chat_history:
         st.session_state.current_chat_id = chat_id
         st.session_state.messages = st.session_state.chat_history[chat_id]['messages'].copy()
-        st.rerun()
+        st.experimental_rerun()  # Use experimental_rerun for better reliability
 
 def format_chat_title(chat):
     """Format chat title"""
@@ -125,10 +129,10 @@ with st.sidebar:
     
     # New Chat button with unique key
     if st.button("New Chat" if interface_language == "English" else "محادثة جديدة", 
-                 key="new_chat_btn_sidebar",  # Unique key
+                 key="new_chat_button",  # Unique key
                  use_container_width=True):
-        create_new_chat()
-        st.rerun()
+        st.session_state.current_chat_id = create_new_chat()
+        st.experimental_rerun()  # Use experimental_rerun for better reliability
     
     st.markdown("---")
     
@@ -142,9 +146,11 @@ with st.sidebar:
                            reverse=True)
                      if chat_data['visible'] and len(chat_data['messages']) > 0]
     
-    # Display chats
-    for i, (chat_id, chat_data) in enumerate(visible_chats):
-        button_key = f"chat_btn_{chat_id}_{i}"  # Unique key for each button
+    # Display chats with efficient sorting and unique keys
+    for i, (chat_id, chat_data) in enumerate(sorted(visible_chats, 
+                                                   key=lambda x: x[1]['timestamp'],
+                                                   reverse=True)):
+        button_key = f"load_chat_{chat_id}_{i}"  # Unique key for each button
         if st.button(format_chat_title(chat_data), 
                     key=button_key,
                     use_container_width=True):
@@ -517,6 +523,7 @@ def process_response(input_text, response, is_voice=False):
         # Create new chat if none exists
         if current_chat_id is None:
             current_chat_id = create_new_chat()
+            st.session_state.current_chat_id = current_chat_id
         
         # Add user message
         user_message = {"role": "user", "content": input_text}
@@ -525,8 +532,7 @@ def process_response(input_text, response, is_voice=False):
         # Get response and context
         assistant_response = response["answer"]
         context = response.get("context", [])
-        current_msg_index = len(st.session_state.messages)
-
+        
         # Add assistant message
         assistant_message = {"role": "assistant", "content": assistant_response}
         st.session_state.messages.append(assistant_message)
