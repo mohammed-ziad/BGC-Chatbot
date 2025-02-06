@@ -124,7 +124,7 @@ with st.sidebar:
     interface_language = st.selectbox("Interface Language", ["English", "العربية"])
     
     # New Chat button with unique key
-    if st.button("New Chat" if interface_language == "English" else "محادثة جديدة", 
+    if st.button("New111 Chat" if interface_language == "English" else "محادثة جديدة", 
                  key="new_chat_btn_sidebar",  # Unique key
                  use_container_width=True):
         create_new_chat()
