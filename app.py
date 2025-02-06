@@ -132,23 +132,9 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Display chat history
-    st.markdown("### Previous Chats" if interface_language == "English" else "### المحادثات السابقة")
     
-    # Get visible chats sorted by timestamp
-    visible_chats = [(chat_id, chat_data) for chat_id, chat_data in 
-                     sorted(st.session_state.chat_history.items(), 
-                           key=lambda x: x[1]['timestamp'], 
-                           reverse=True)
-                     if chat_data['visible'] and len(chat_data['messages']) > 0]
     
-    # Display chats
-    for i, (chat_id, chat_data) in enumerate(visible_chats):
-        button_key = f"chat_btn_{chat_id}_{i}"  # Unique key for each button
-        if st.button(format_chat_title(chat_data), 
-                    key=button_key,
-                    use_container_width=True):
-            load_chat(chat_id)
+   
 
     # Apply CSS direction based on selected language
     if interface_language == "العربية":
