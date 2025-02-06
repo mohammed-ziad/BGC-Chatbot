@@ -659,25 +659,11 @@ def create_new_chat():
     chat_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     st.session_state.current_chat_id = chat_id
     st.session_state.messages = []
-    
-    # Create new memory instance for this specific chat
-    st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
-        memory_key="history",
-        return_messages=True
-    )
-    
-    # Initialize chat
-    st.session_state.chat_history[chat_id] = {
-        'messages': [],
-        'timestamp': datetime.now(),
-        'first_message': None,
-        'visible': False
-    }
-    
-    # Clear any existing page references
+    st.session_state.chat_memories[chat_id] = ConversationBufferMemory(memory_key="history", return_messages=True)
+    st.session_state.chat_history[chat_id] = {'messages': [], 'timestamp': datetime.now(), 'first_message': None, 'visible': False}
     st.session_state.page_references = {}
-    
     return chat_id
+
 
 
 def load_chat(chat_id):
