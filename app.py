@@ -562,18 +562,11 @@ if human_input:
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
         with st.chat_message("assistant"):
             st.markdown(assistant_response)
-
-
-
-
 from datetime import datetime, timedelta
-# Import or define your conversation memory. In this example we use langchain's ConversationBufferMemory.
-# Make sure to install langchain (e.g., pip install langchain) if you haven't already.
-from langchain.memory import ConversationBufferMemory
 
-# ---------------------------
-# Initialize Session State
-# ---------------------------
+# ... rest of the imports
+
+# Initialize session state for chat management
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = {}
 if 'current_chat_id' not in st.session_state:
@@ -582,13 +575,8 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'chat_memories' not in st.session_state:
     st.session_state.chat_memories = {}
-if 'interface_language' not in st.session_state:
-    st.session_state.interface_language = "English"  # or "العربية"
-interface_language = st.session_state.interface_language
 
-# ---------------------------
-# UI Texts for Multilingual Support
-# ---------------------------
+# Add UI text dictionary for multilingual support
 UI_TEXTS = {
     "English": {
         "new_chat": "New Chat",
@@ -606,26 +594,19 @@ UI_TEXTS = {
     }
 }
 
-# ---------------------------
-# Helper Functions
-# ---------------------------
 def create_new_chat():
-    """
-    Create a new independent chat.
-    This function sets up a new chat with a unique chat ID,
-    resets the current messages, and creates a memory instance.
-    """
+    """Create a new independent chat"""
     chat_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     st.session_state.current_chat_id = chat_id
     st.session_state.messages = []
     
-    # Create a new memory instance for this specific chat.
+    # Create new memory instance for this specific chat
     st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
         memory_key="history",
         return_messages=True
     )
     
-    # Initialize the chat in the chat history (it is hidden until the first message is sent).
+    # Initialize chat but don't show in history until first message
     if chat_id not in st.session_state.chat_history:
         st.session_state.chat_history[chat_id] = {
             'messages': [],
@@ -636,30 +617,27 @@ def create_new_chat():
     return chat_id
 
 def load_chat(chat_id):
-    """
-    Load a specific chat from the chat history.
-    Restores messages and conversation memory, then forces a rerun.
-    """
+    """Load a specific chat"""
     if chat_id in st.session_state.chat_history:
         st.session_state.current_chat_id = chat_id
         st.session_state.messages = st.session_state.chat_history[chat_id]['messages']
         
-        # Get or create memory for this specific chat.
+        # Get or create memory for this specific chat
         if chat_id not in st.session_state.chat_memories:
             st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
                 memory_key="history",
                 return_messages=True
             )
-            # Rebuild memory from chat messages.
+            # Rebuild memory from chat messages
             for msg in st.session_state.messages:
                 if msg["role"] == "user":
                     st.session_state.chat_memories[chat_id].chat_memory.add_user_message(msg["content"])
                 elif msg["role"] == "assistant":
                     st.session_state.chat_memories[chat_id].chat_memory.add_ai_message(msg["content"])
-        st.experimental_rerun()
+        st.rerun()
 
 def format_chat_title(chat):
-    """Return a formatted chat title, using the first message or a default title."""
+    """Format chat title"""
     display_text = chat['first_message']
     if display_text:
         display_text = display_text[:50] + '...' if len(display_text) > 50 else display_text
@@ -668,7 +646,7 @@ def format_chat_title(chat):
     return display_text
 
 def format_chat_date(timestamp):
-    """Format the chat date to display 'Today', 'Yesterday', or the date."""
+    """Format chat date"""
     today = datetime.now().date()
     chat_date = timestamp.date()
     
@@ -679,98 +657,79 @@ def format_chat_date(timestamp):
     else:
         return timestamp.strftime('%Y-%m-%d')
 
+# ... rest of the existing code ...
+
+# Update the sidebar section with chat history
+with st.sidebar:
+    # Add New Chat button after the existing sidebar content
+    if st.button(UI_TEXTS[interface_language]['new_chat'], use_container_width=True):
+        create_new_chat()
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Display chat history
+    st.markdown(f"### {UI_TEXTS[interface_language]['previous_chats']}")
+    
+    # Group chats by date
+    chats_by_date = {}
+    for chat_id, chat_data in st.session_state.chat_history.items():
+        if chat_data['visible'] and chat_data['messages']:
+            date = chat_data['timestamp'].date()
+            if date not in chats_by_date:
+                chats_by_date[date] = []
+            chats_by_date[date].append((chat_id, chat_data))
+    
+    # Display chats grouped by date
+    for date in sorted(chats_by_date.keys(), reverse=True):
+        chats = chats_by_date[date]
+        st.markdown(f"#### {format_chat_date(chats[0][1]['timestamp'])}")
+        
+        for chat_id, chat_data in sorted(chats, key=lambda x: x[1]['timestamp'], reverse=True):
+            if st.sidebar.button(
+                format_chat_title(chat_data),
+                key=f"chat_{chat_id}",
+                use_container_width=True
+            ):
+                load_chat(chat_id)
+
+# Update the process_response function to handle chat history
 def process_response(input_text, response, is_voice=False):
-    """
-    Process a new message by the user and update the conversation history,
-    memory, and sidebar chat list. If this is the first message in the chat,
-    it sets the chat title and marks the chat as visible.
-    """
     try:
         current_chat_id = st.session_state.current_chat_id
+        
+        # Create new chat if none exists
         if current_chat_id is None:
             current_chat_id = create_new_chat()
         
-        # Add the user's message.
+        # Add user message
         user_message = {"role": "user", "content": input_text}
         st.session_state.messages.append(user_message)
         
-        # If this is the first message, update the chat title and make it visible.
+        # Update chat title if this is the first message
         if len(st.session_state.messages) == 1:
             title = input_text.strip().replace('\n', ' ')
             title = title[:50] + '...' if len(title) > 50 else title
             st.session_state.chat_history[current_chat_id]['first_message'] = title
             st.session_state.chat_history[current_chat_id]['visible'] = True
-            # Force rerun so that the new chat immediately appears in the sidebar.
-            st.experimental_rerun()
         
-        # Process the assistant response.
-        # Replace the following dummy response with your actual response generation logic.
-        assistant_response_text = response.get("answer", "This is a dummy answer.")
-        assistant_message = {"role": "assistant", "content": assistant_response_text}
-        st.session_state.messages.append(assistant_message)
+        # ... rest of the existing process_response code ...
         
-        # Update the chat history with all messages.
+        # Update chat history
         st.session_state.chat_history[current_chat_id]['messages'] = st.session_state.messages
         
-        # Update the conversation memory.
+        # Get current chat's memory
         current_memory = st.session_state.chat_memories[current_chat_id]
+        
+        # Update memory
         current_memory.chat_memory.add_user_message(input_text)
-        current_memory.chat_memory.add_ai_message(assistant_response_text)
+        current_memory.chat_memory.add_ai_message(response["answer"])
         
         return True
     except Exception as e:
-        st.error(f"{UI_TEXTS[interface_language]['error_question']}{str(e)}")
+        st.error(f"Error processing response: {str(e)}")
         return False
 
-# ---------------------------
-# Sidebar: Chat List & New Chat Button
-# ---------------------------
-with st.sidebar:
-    if st.button(UI_TEXTS[interface_language]['new_chat'], use_container_width=True):
-        create_new_chat()
-        st.experimental_rerun()
-    
-    st.markdown("---")
-    st.markdown(f"### {UI_TEXTS[interface_language]['previous_chats']}")
-    
-    # Group chats by date.
-    chats_by_date = {}
-    for chat_id, chat_data in st.session_state.chat_history.items():
-        if chat_data['visible'] and chat_data['messages']:
-            date = chat_data['timestamp'].date()
-            chats_by_date.setdefault(date, []).append((chat_id, chat_data))
-    
-    # Display chats grouped by date.
-    for date in sorted(chats_by_date.keys(), reverse=True):
-        chats = chats_by_date[date]
-        st.markdown(f"#### {format_chat_date(chats[0][1]['timestamp'])}")
-        for chat_id, chat_data in sorted(chats, key=lambda x: x[1]['timestamp'], reverse=True):
-            if st.sidebar.button(format_chat_title(chat_data), key=f"chat_{chat_id}", use_container_width=True):
-                load_chat(chat_id)
-
-# ---------------------------
-# Main Chat Area
-# ---------------------------
-st.title("Chat Application")
-st.markdown("Type your message below:")
-
-# Create a new chat if no chat is selected.
+# Create new chat if no chat is selected
 if st.session_state.current_chat_id is None:
     create_new_chat()
-
-# Display the conversation.
-for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f"**User:** {msg['content']}")
-    elif msg["role"] == "assistant":
-        st.markdown(f"**Assistant:** {msg['content']}")
-
-# Input form for new messages.
-with st.form("chat_input", clear_on_submit=True):
-    user_input = st.text_input("Your message")
-    submitted = st.form_submit_button("Send")
-    if submitted and user_input:
-        # Replace the dummy response with your actual API call or logic.
-        dummy_response = {"answer": f"Echo: {user_input}"}
-        process_response(user_input, dummy_response)
-        st.experimental_rerun()
