@@ -606,15 +606,15 @@ def create_new_chat():
         return_messages=True
     )
     
-    # Initialize chat but don't show in history until first message
-    if chat_id not in st.session_state.chat_history:
-        st.session_state.chat_history[chat_id] = {
-            'messages': [],
-            'timestamp': datetime.now(),
-            'first_message': None,
-            'visible': False
-        }
+    # Initialize chat
+    st.session_state.chat_history[chat_id] = {
+        'messages': [],
+        'timestamp': datetime.now(),
+        'first_message': None,
+        'visible': False  # Will be set to True when first message is added
+    }
     return chat_id
+
 
 def load_chat(chat_id):
     """Load a specific chat"""
