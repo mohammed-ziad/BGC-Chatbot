@@ -418,21 +418,21 @@ def display_page_references(message_index, relevant_pages):
             # Show page tabs in second column
             with col2:
                 tabs = st.tabs([f"Page {page}" for page in page_numbers])
-                for tab, page_num in zip(tabs, page_numbers):
-                    with tab:
-                        score = relevant_pages[page_num]["score"]
-                        # Only show screenshots for highly relevant pages (score > 0.5)
-                        # if score >= 0.5:
-                        #     # Show content preview
-                        #     st.write("Content Preview:")
-                        #     content = relevant_pages[page_num]["content"]
-                        #     st.text(content[:200] + "..." if len(content) > 200 else content)
+                # for tab, page_num in zip(tabs, page_numbers):
+                #     with tab:
+                #         score = relevant_pages[page_num]["score"]
+                #         # Only show screenshots for highly relevant pages (score > 0.5)
+                #         # if score >= 0.5:
+                #         #     # Show content preview
+                #         #     st.write("Content Preview:")
+                #         #     content = relevant_pages[page_num]["content"]
+                #         #     st.text(content[:200] + "..." if len(content) > 200 else content)
                             
-                            # Show page screenshot
-                            st.write("Page Screenshot:")
-                            capture_and_display_page(page_num)
-                        else:
-                            st.write("Content score below threshold. Screenshot not displayed.")
+                #             # Show page screenshot
+                #             st.write("Page Screenshot:")
+                #             capture_and_display_page(page_num)
+                #         else:
+                #             st.write("Content score below threshold. Screenshot not displayed.")
             
             return True
     except Exception as e:
