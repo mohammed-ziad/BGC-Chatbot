@@ -426,7 +426,7 @@ def display_page_references(message_index, relevant_pages):
                             # # Show content preview
                             # st.write("Content Preview:")
                             # content = relevant_pages[page_num]["content"]
-                            # st.text(content[:200] + "..." if len(content) > 200 else content)
+                            st.text(content[:200] + "..." if len(content) > 200 else content)
                             
                             # Show page screenshot
                             st.write("Page Screenshot:")
