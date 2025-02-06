@@ -753,41 +753,6 @@ def format_chat_date(timestamp):
     else:
         return timestamp.strftime('%Y-%m-%d')
 
-# ... rest of the existing code ...
-
-# Update sidebar chat list display
-with st.sidebar:
-    # Add New Chat button
-    if st.button(UI_TEXTS[interface_language]['new_chat'], use_container_width=True):
-        create_new_chat()
-        st.rerun()
-    
-    st.markdown("---")
-    
-    # Display chat history
-    st.markdown(f"### {UI_TEXTS[interface_language]['previous_chats']}")
-    
-    # Group chats by date
-    chats_by_date = {}
-    for chat_id, chat_data in st.session_state.chat_history.items():
-        if chat_data['visible'] and len(chat_data['messages']) > 0:  # Only show chats with messages
-            date = chat_data['timestamp'].date()
-            if date not in chats_by_date:
-                chats_by_date[date] = []
-            chats_by_date[date].append((chat_id, chat_data))
-    
-    # Display chats grouped by date
-    for date in sorted(chats_by_date.keys(), reverse=True):
-        chats = chats_by_date[date]
-        st.markdown(f"#### {format_chat_date(chats[0][1]['timestamp'])}")
-        
-        for chat_id, chat_data in sorted(chats, key=lambda x: x[1]['timestamp'], reverse=True):
-            if st.sidebar.button(
-                format_chat_title(chat_data),
-                key=f"chat_{chat_id}",
-                use_container_width=True
-            ):
-                load_chat(chat_id)
 
 # Update the process_response function to handle chat history
 def process_response(input_text, response, is_voice=False):
