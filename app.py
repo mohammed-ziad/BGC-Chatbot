@@ -24,23 +24,46 @@ if 'messages' not in st.session_state:
 if 'chat_memories' not in st.session_state:
     st.session_state.chat_memories = {}
 
-# Add UI text dictionary for multilingual support
-UI_TEXTS = {
-    "English": {
-        "new_chat": "New Chat",
-        "previous_chats": "Previous Chats",
-        "today": "Today",
-        "yesterday": "Yesterday",
-        "error_question": "Error processing question: "
-    },
-    "العربية": {
-        "new_chat": "محادثة جديدة",
-        "previous_chats": "المحادثات السابقة",
-        "today": "اليوم",
-        "yesterday": "أمس",
-        "error_question": "خطأ في معالجة السؤال: "
+def create_new_chat():
+    """Create a new independent chat"""
+    chat_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    st.session_state.current_chat_id = chat_id
+    st.session_state.messages = []
+    
+    # Create new memory instance for this specific chat
+    st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
+        memory_key="history",
+        return_messages=True
+    )
+    
+    # Initialize chat
+    st.session_state.chat_history[chat_id] = {
+        'messages': [],
+        'timestamp': datetime.now(),
+        'first_message': None,
+        'visible': False
     }
-}
+    
+    # Clear page references for new chat
+    st.session_state.page_references = {}
+    
+    return chat_id
+
+def load_chat(chat_id):
+    """Load a specific chat"""
+    if chat_id in st.session_state.chat_history:
+        st.session_state.current_chat_id = chat_id
+        st.session_state.messages = st.session_state.chat_history[chat_id]['messages'].copy()
+        st.experimental_rerun()  # Use experimental_rerun for better reliability
+
+def format_chat_title(chat):
+    """Format chat title"""
+    display_text = chat['first_message']
+    if display_text:
+        display_text = display_text[:50] + '...' if len(display_text) > 50 else display_text
+    else:
+        display_text = "New Chat" if interface_language == "English" else "محادثة جديدة"
+    return display_text
 
 # Initialize API key variables
 groq_api_key = "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"
@@ -104,87 +127,42 @@ with st.sidebar:
     # Language selection dropdown
     interface_language = st.selectbox("Interface Language", ["English", "العربية"])
     
+    # New Chat button with unique key
+    if st.button("New Chat" if interface_language == "English" else "محادثة جديدة", 
+                 key="new_chat_button",  # Unique key
+                 use_container_width=True):
+        st.session_state.current_chat_id = create_new_chat()
+        st.experimental_rerun()  # Use experimental_rerun for better reliability
+    
+    st.markdown("---")
+    
+    # Display chat history
+    st.markdown("### Previous Chats" if interface_language == "English" else "### المحادثات السابقة")
+    
+    # Get visible chats sorted by timestamp
+    visible_chats = [(chat_id, chat_data) for chat_id, chat_data in 
+                     sorted(st.session_state.chat_history.items(), 
+                           key=lambda x: x[1]['timestamp'], 
+                           reverse=True)
+                     if chat_data['visible'] and len(chat_data['messages']) > 0]
+    
+    # Display chats with efficient sorting and unique keys
+    for i, (chat_id, chat_data) in enumerate(sorted(visible_chats, 
+                                                   key=lambda x: x[1]['timestamp'],
+                                                   reverse=True)):
+        button_key = f"load_chat_{chat_id}_{i}"  # Unique key for each button
+        if st.button(format_chat_title(chat_data), 
+                    key=button_key,
+                    use_container_width=True):
+            load_chat(chat_id)
+
     # Apply CSS direction based on selected language
     if interface_language == "العربية":
-        apply_css_direction("rtl")
-        st.title("الإعدادات")
+        apply_css_direction("rtl")  # Right-to-left for Arabic
+        st.title("الإعدادات")  # Sidebar title in Arabic
     else:
-        apply_css_direction("ltr")
-        st.title("Settings")
-
-    # Validate API key inputs and initialize components if valid
-    if groq_api_key and google_api_key:
-        # API key setup and model initialization
-        os.environ["GOOGLE_API_KEY"] = google_api_key
-        llm = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
-        
-        # Initialize embeddings if not already done
-        if "vectors" not in st.session_state:
-            with st.spinner("جارٍ تحميل التضميدات... الرجاء الانتظار." if interface_language == "العربية" else "Loading embeddings... Please wait."):
-                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-                
-                try:
-                    # Load and merge FAISS indexes
-                    vectors_1 = FAISS.load_local("embeddings", embeddings, allow_dangerous_deserialization=True)
-                    vectors_2 = FAISS.load_local("embeddingsocr", embeddings, allow_dangerous_deserialization=True)
-                    vectors_1.merge_from(vectors_2)
-                    st.session_state.vectors = vectors_1
-                except Exception as e:
-                    st.error(f"Error loading embeddings: {str(e)}")
-                    st.session_state.vectors = None
-        
-        # Voice input section
-        st.markdown("### " + ("الإدخال الصوتي" if interface_language == "العربية" else "Voice Input"))
-        input_lang_code = "ar" if interface_language == "العربية" else "en"
-        voice_input = speech_to_text(
-            start_prompt="🎤",
-            stop_prompt="⏹️ إيقاف" if interface_language == "العربية" else "⏹️ Stop",
-            language=input_lang_code,
-            use_container_width=True,
-            just_once=True,
-            key="mic_button",
-        )
-
-        # Reset button
-        if st.button("إعادة تعيين الدردشة" if interface_language == "العربية" else "Reset Chat", 
-                     key="reset_chat_btn"):
-            st.session_state.messages = []
-            st.session_state.memory.clear()
-            st.success("تمت إعادة تعيين الدردشة بنجاح." if interface_language == "العربية" else "Chat has been reset successfully.")
-            st.rerun()
-
-        st.markdown("---")
-
-        # New Chat button
-        if st.button(UI_TEXTS[interface_language]["new_chat"], 
-                     key="new_chat_btn",
-                     use_container_width=True):
-            create_new_chat()
-            st.rerun()
-
-        st.markdown("---")
-
-        # Chat history section
-        st.markdown(f"### {UI_TEXTS[interface_language]['previous_chats']}")
-        
-        # Get visible chats sorted by timestamp
-        visible_chats = [(chat_id, chat_data) for chat_id, chat_data in 
-                         sorted(st.session_state.chat_history.items(), 
-                               key=lambda x: x[1]['timestamp'], 
-                               reverse=True)
-                         if chat_data['visible'] and len(chat_data['messages']) > 0]
-        
-        # Display chats with unique keys
-        for i, (chat_id, chat_data) in enumerate(visible_chats):
-            button_key = f"chat_btn_{chat_id}_{i}"
-            if st.button(format_chat_title(chat_data), 
-                        key=button_key,
-                        use_container_width=True):
-                load_chat(chat_id)
-
-    else:
-        st.error("الرجاء إدخال مفاتيح API للمتابعة." if interface_language == "العربية" else "Please enter both API keys to proceed.")
-
+        apply_css_direction("ltr")  # Left-to-right for English
+        st.title("Settings")  # Sidebar title in English
 
     # Validate API key inputs and initialize components if valid
     if groq_api_key and google_api_key:
@@ -676,4 +654,179 @@ if human_input:
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
         with st.chat_message("assistant"):
             st.markdown(assistant_response)
+from datetime import datetime, timedelta
 
+# ... rest of the imports
+
+# Initialize session state for chat management
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = {}
+if 'current_chat_id' not in st.session_state:
+    st.session_state.current_chat_id = None
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'chat_memories' not in st.session_state:
+    st.session_state.chat_memories = {}
+
+# Add UI text dictionary for multilingual support
+UI_TEXTS = {
+    "English": {
+        "new_chat": "New Chat",
+        "previous_chats": "Previous Chats",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "error_question": "Error processing question: "
+    },
+    "العربية": {
+        "new_chat": "محادثة جديدة",
+        "previous_chats": "المحادثات السابقة",
+        "today": "اليوم",
+        "yesterday": "أمس",
+        "error_question": "خطأ في معالجة السؤال: "
+    }
+}
+
+def create_new_chat():
+    """Create a new independent chat"""
+    chat_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    st.session_state.current_chat_id = chat_id
+    st.session_state.messages = []
+    
+    # Create new memory instance for this specific chat
+    st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
+        memory_key="history",
+        return_messages=True
+    )
+    
+    # Initialize chat
+    st.session_state.chat_history[chat_id] = {
+        'messages': [],
+        'timestamp': datetime.now(),
+        'first_message': None,
+        'visible': False
+    }
+    
+    # Clear any existing page references
+    st.session_state.page_references = {}
+    
+    return chat_id
+
+
+def load_chat(chat_id):
+    """Load a specific chat"""
+    if chat_id in st.session_state.chat_history:
+        st.session_state.current_chat_id = chat_id
+        st.session_state.messages = st.session_state.chat_history[chat_id]['messages']
+        
+        # Get or create memory for this specific chat
+        if chat_id not in st.session_state.chat_memories:
+            st.session_state.chat_memories[chat_id] = ConversationBufferMemory(
+                memory_key="history",
+                return_messages=True
+            )
+            # Rebuild memory from chat messages
+            for msg in st.session_state.messages:
+                if msg["role"] == "user":
+                    st.session_state.chat_memories[chat_id].chat_memory.add_user_message(msg["content"])
+                elif msg["role"] == "assistant":
+                    st.session_state.chat_memories[chat_id].chat_memory.add_ai_message(msg["content"])
+        st.rerun()
+
+def format_chat_title(chat):
+    """Format chat title"""
+    display_text = chat['first_message']
+    if display_text:
+        display_text = display_text[:50] + '...' if len(display_text) > 50 else display_text
+    else:
+        display_text = UI_TEXTS[interface_language]['new_chat']
+    return display_text
+
+def format_chat_date(timestamp):
+    """Format chat date"""
+    today = datetime.now().date()
+    chat_date = timestamp.date()
+    
+    if chat_date == today:
+        return UI_TEXTS[interface_language]['today']
+    elif chat_date == today - timedelta(days=1):
+        return UI_TEXTS[interface_language]['yesterday']
+    else:
+        return timestamp.strftime('%Y-%m-%d')
+
+# ... rest of the existing code ...
+
+# Update sidebar chat list display
+with st.sidebar:
+    # Add New Chat button
+    if st.button(UI_TEXTS[interface_language]['new_chat'], use_container_width=True):
+        create_new_chat()
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Display chat history
+    st.markdown(f"### {UI_TEXTS[interface_language]['previous_chats']}")
+    
+    # Group chats by date
+    chats_by_date = {}
+    for chat_id, chat_data in st.session_state.chat_history.items():
+        if chat_data['visible'] and len(chat_data['messages']) > 0:  # Only show chats with messages
+            date = chat_data['timestamp'].date()
+            if date not in chats_by_date:
+                chats_by_date[date] = []
+            chats_by_date[date].append((chat_id, chat_data))
+    
+    # Display chats grouped by date
+    for date in sorted(chats_by_date.keys(), reverse=True):
+        chats = chats_by_date[date]
+        st.markdown(f"#### {format_chat_date(chats[0][1]['timestamp'])}")
+        
+        for chat_id, chat_data in sorted(chats, key=lambda x: x[1]['timestamp'], reverse=True):
+            if st.sidebar.button(
+                format_chat_title(chat_data),
+                key=f"chat_{chat_id}",
+                use_container_width=True
+            ):
+                load_chat(chat_id)
+
+# Update the process_response function to handle chat history
+def process_response(input_text, response, is_voice=False):
+    try:
+        current_chat_id = st.session_state.current_chat_id
+        
+        # Create new chat if none exists
+        if current_chat_id is None:
+            current_chat_id = create_new_chat()
+        
+        # Add user message
+        user_message = {"role": "user", "content": input_text}
+        st.session_state.messages.append(user_message)
+        
+        # Update chat title if this is the first message
+        if len(st.session_state.messages) == 1:
+            title = input_text.strip().replace('\n', ' ')
+            title = title[:50] + '...' if len(title) > 50 else title
+            st.session_state.chat_history[current_chat_id]['first_message'] = title
+            st.session_state.chat_history[current_chat_id]['visible'] = True
+            st.rerun()  # Immediately update the chat list in sidebar
+        
+        # ... rest of the existing process_response code ...
+        
+        # Update chat history
+        st.session_state.chat_history[current_chat_id]['messages'] = st.session_state.messages
+        
+        # Get current chat's memory
+        current_memory = st.session_state.chat_memories[current_chat_id]
+        
+        # Update memory
+        current_memory.chat_memory.add_user_message(input_text)
+        current_memory.chat_memory.add_ai_message(response["answer"])
+        
+        return True
+    except Exception as e:
+        st.error(f"Error processing response: {str(e)}")
+        return False
+
+# Create new chat if no chat is selected
+if st.session_state.current_chat_id is None:
+    create_new_chat()
