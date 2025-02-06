@@ -123,8 +123,10 @@ with st.sidebar:
     # Language selection dropdown
     interface_language = st.selectbox("Interface Language", ["English", "العربية"])
     
-    # New Chat button
-    if st.button("New Chat" if interface_language == "English" else "محادثة جديدة", use_container_width=True):
+    # New Chat button with unique key
+    if st.button("New Chat" if interface_language == "English" else "محادثة جديدة", 
+                 key="new_chat_btn_sidebar",  # Unique key
+                 use_container_width=True):
         create_new_chat()
         st.rerun()
     
@@ -133,13 +135,20 @@ with st.sidebar:
     # Display chat history
     st.markdown("### Previous Chats" if interface_language == "English" else "### المحادثات السابقة")
     
-    # Display all visible chats
-    for chat_id, chat_data in sorted(st.session_state.chat_history.items(), 
-                                   key=lambda x: x[1]['timestamp'], 
-                                   reverse=True):
-        if chat_data['visible']:
-            if st.button(format_chat_title(chat_data), key=f"chat_{chat_id}", use_container_width=True):
-                load_chat(chat_id)
+    # Get visible chats sorted by timestamp
+    visible_chats = [(chat_id, chat_data) for chat_id, chat_data in 
+                     sorted(st.session_state.chat_history.items(), 
+                           key=lambda x: x[1]['timestamp'], 
+                           reverse=True)
+                     if chat_data['visible'] and len(chat_data['messages']) > 0]
+    
+    # Display chats
+    for i, (chat_id, chat_data) in enumerate(visible_chats):
+        button_key = f"chat_btn_{chat_id}_{i}"  # Unique key for each button
+        if st.button(format_chat_title(chat_data), 
+                    key=button_key,
+                    use_container_width=True):
+            load_chat(chat_id)
 
     # Apply CSS direction based on selected language
     if interface_language == "العربية":
@@ -547,6 +556,7 @@ def process_response(input_text, response, is_voice=False):
         current_memory = st.session_state.chat_memories[current_chat_id]
         current_memory.chat_memory.add_user_message(input_text)
         current_memory.chat_memory.add_ai_message(assistant_response)
+
         
         # Process page references
         if context:
@@ -687,8 +697,12 @@ def create_new_chat():
         'messages': [],
         'timestamp': datetime.now(),
         'first_message': None,
-        'visible': False  # Will be set to True when first message is added
+        'visible': False
     }
+    
+    # Clear any existing page references
+    st.session_state.page_references = {}
+    
     return chat_id
 
 
